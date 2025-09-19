@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: prompt-lab-backend
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://accounts.google.com
+  main:
+    banner-mode: "off"
+
+app:
+  frontend-origin: ${APP_FRONTEND_ORIGIN:http://localhost:3000}
+  admin-emails: ${APP_ADMIN_EMAILS:admin@example.com}
+  sheets:
+    spreadsheet-id: ${APP_SHEETS_SPREADSHEET_ID:replace-with-spreadsheet-id}
+  gemini:
+    api-key: ${GEMINI_API_KEY:changeme}
+    model: ${GEMINI_MODEL:gemini-pro}
+
+server:
+  port: 8080

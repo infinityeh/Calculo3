@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 
@@ -63,7 +63,7 @@ public class ChatController {
         if (!topicGuard.isAllowed(request.prompt())) {
             log.info("Blocked prompt from {}", email);
             sheetsClient.appendRow("messages",
-                    List.of(Instant.now().toString(), email, request.sessionId(), UUID.randomUUID().toString(),
+                    Arrays.asList(Instant.now().toString(), email, request.sessionId(), UUID.randomUUID().toString(),
                             "SYSTEM", topicGuard.buildBlockedMessage(), "{}", 0, null, request.assignmentTag()));
             return ChatResponse.blocked(topicGuard.buildBlockedMessage());
         }
@@ -73,16 +73,16 @@ public class ChatController {
         String sessionId = isNewSession ? UUID.randomUUID().toString() : request.sessionId();
         if (isNewSession) {
             sheetsClient.appendRow("sessions",
-                    List.of(Instant.now().toString(), email, sessionId, request.assignmentTag()));
+                    Arrays.asList(Instant.now().toString(), email, sessionId, request.assignmentTag()));
         }
         String userMessageId = UUID.randomUUID().toString();
         sheetsClient.appendRow("messages",
-                List.of(Instant.now().toString(), email, sessionId, userMessageId, "USER", request.prompt(),
+                Arrays.asList(Instant.now().toString(), email, sessionId, userMessageId, "USER", request.prompt(),
                         rubricJson, null, null, request.assignmentTag()));
         GeminiClient.GeminiResponse response = geminiClient.generateText(request.prompt());
         String assistantMessageId = UUID.randomUUID().toString();
         sheetsClient.appendRow("messages",
-                List.of(Instant.now().toString(), email, sessionId, assistantMessageId, "ASSISTANT",
+                Arrays.asList(Instant.now().toString(), email, sessionId, assistantMessageId, "ASSISTANT",
                         response.text(), "{}", response.latencyMs(), response.tokens(), request.assignmentTag()));
         return ChatResponse.success(sessionId, assistantMessageId, response.text());
     }
@@ -91,7 +91,7 @@ public class ChatController {
     public ResponseEntity<Void> feedback(@Valid @RequestBody FeedbackRequest request, JwtAuthenticationToken token) {
         String email = authUtil.extractEmail(token);
         sheetsClient.appendRow("feedback",
-                List.of(Instant.now().toString(), email, request.messageId(), request.usefulness(),
+                Arrays.asList(Instant.now().toString(), email, request.messageId(), request.usefulness(),
                         request.thumbsUp(), request.comment()));
         return ResponseEntity.accepted().build();
     }
@@ -100,7 +100,7 @@ public class ChatController {
     public ResponseEntity<Void> consent(@Valid @RequestBody ConsentRequest request, JwtAuthenticationToken token) {
         String email = authUtil.extractEmail(token);
         sheetsClient.appendRow("consents",
-                List.of(Instant.now().toString(), email, request.version(), request.accepted()));
+                Arrays.asList(Instant.now().toString(), email, request.version(), request.accepted()));
         return ResponseEntity.ok().build();
     }
 

@@ -46,6 +46,7 @@ public class GeminiClient {
                 .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(30))
                 .onErrorResume(err -> {
                     log.error("Gemini request failed", err);
                     return Mono.just(Map.of());

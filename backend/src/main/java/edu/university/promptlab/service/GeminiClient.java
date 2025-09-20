@@ -6,11 +6,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 @Component
 public class GeminiClient {
@@ -48,7 +50,12 @@ public class GeminiClient {
                 .bodyToMono(Map.class)
                 .timeout(Duration.ofSeconds(30))
                 .onErrorResume(err -> {
-                    log.error("Gemini request failed", err);
+                    Throwable cause = Exceptions.unwrap(err);
+                    if (cause instanceof TimeoutException) {
+                        log.error("Gemini request timed out", cause);
+                    } else {
+                        log.error("Gemini request failed", cause);
+                    }
                     return Mono.just(Map.of());
                 })
                 .defaultIfEmpty(Map.of())

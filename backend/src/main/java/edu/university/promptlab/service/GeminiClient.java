@@ -29,7 +29,7 @@ public class GeminiClient {
         this.model = model;
     }
 
-    public GeminiResponse generateText(String prompt) {
+    public Mono<GeminiResponse> generateText(String prompt) {
         String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey);
         Map<String, Object> requestBody = Map.of(
                 "contents", java.util.List.of(
@@ -40,7 +40,7 @@ public class GeminiClient {
                 )
         );
         Instant start = Instant.now();
-        Map<String, Object> response = webClient.post()
+        return webClient.post()
                 .uri(url)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(requestBody)
@@ -50,11 +50,13 @@ public class GeminiClient {
                     log.error("Gemini request failed", err);
                     return Mono.just(Map.of());
                 })
-                .block(Duration.ofSeconds(30));
-        long latency = Duration.between(start, Instant.now()).toMillis();
-        String text = extractText(response);
-        Integer tokens = extractTokens(response);
-        return new GeminiResponse(text, latency, tokens);
+                .defaultIfEmpty(Map.of())
+                .map(response -> {
+                    long latency = Duration.between(start, Instant.now()).toMillis();
+                    String text = extractText(response);
+                    Integer tokens = extractTokens(response);
+                    return new GeminiResponse(text, latency, tokens);
+                });
     }
 
     private String extractText(Map<String, Object> response) {

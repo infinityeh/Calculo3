@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
+import reactor.core.publisher.Mono;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -46,10 +48,11 @@ public class ChatControllerTest {
         JwtAuthenticationToken token = new JwtAuthenticationToken(jwt);
         when(authUtil.extractEmail(token)).thenReturn("student@example.com");
         when(geminiClient.generateText(request.prompt()))
-                .thenReturn(new GeminiClient.GeminiResponse("Resposta", 123L, 456));
+                .thenReturn(Mono.just(new GeminiClient.GeminiResponse("Resposta", 123L, 456)));
 
-        var response = controller.chat(request, token);
+        var response = controller.chat(request, token).block();
 
+        assertThat(response).isNotNull();
         assertThat(response.blocked()).isFalse();
         assertThat(response.text()).isEqualTo("Resposta");
         verify(sheetsClient, atLeastOnce()).appendRow(eq("messages"), anyList());

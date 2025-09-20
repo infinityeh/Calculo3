@@ -20,6 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -58,33 +59,35 @@ public class ChatController {
     }
 
     @PostMapping("/chat")
-    public ChatResponse chat(@Valid @RequestBody ChatRequest request, JwtAuthenticationToken token) {
-        String email = authUtil.extractEmail(token);
-        if (!topicGuard.isAllowed(request.prompt())) {
-            log.info("Blocked prompt from {}", email);
+    public Mono<ChatResponse> chat(@Valid @RequestBody ChatRequest request, JwtAuthenticationToken token) {
+        return Mono.defer(() -> {
+            String email = authUtil.extractEmail(token);
+            if (!topicGuard.isAllowed(request.prompt())) {
+                log.info("Blocked prompt from {}", email);
+                sheetsClient.appendRow("messages",
+                        Arrays.asList(Instant.now().toString(), email, request.sessionId(), UUID.randomUUID().toString(),
+                                "SYSTEM", topicGuard.buildBlockedMessage(), "{}", 0, null, request.assignmentTag()));
+                return Mono.just(ChatResponse.blocked(topicGuard.buildBlockedMessage()));
+            }
+            Map<String, Object> rubric = rubricService.buildRubric(request.prompt());
+            String rubricJson = serialize(rubric);
+            boolean isNewSession = request.sessionId() == null || request.sessionId().isBlank();
+            String sessionId = isNewSession ? UUID.randomUUID().toString() : request.sessionId();
+            if (isNewSession) {
+                sheetsClient.appendRow("sessions",
+                        Arrays.asList(Instant.now().toString(), email, sessionId, request.assignmentTag()));
+            }
+            String userMessageId = UUID.randomUUID().toString();
             sheetsClient.appendRow("messages",
-                    Arrays.asList(Instant.now().toString(), email, request.sessionId(), UUID.randomUUID().toString(),
-                            "SYSTEM", topicGuard.buildBlockedMessage(), "{}", 0, null, request.assignmentTag()));
-            return ChatResponse.blocked(topicGuard.buildBlockedMessage());
-        }
-        Map<String, Object> rubric = rubricService.buildRubric(request.prompt());
-        String rubricJson = serialize(rubric);
-        boolean isNewSession = request.sessionId() == null || request.sessionId().isBlank();
-        String sessionId = isNewSession ? UUID.randomUUID().toString() : request.sessionId();
-        if (isNewSession) {
-            sheetsClient.appendRow("sessions",
-                    Arrays.asList(Instant.now().toString(), email, sessionId, request.assignmentTag()));
-        }
-        String userMessageId = UUID.randomUUID().toString();
-        sheetsClient.appendRow("messages",
-                Arrays.asList(Instant.now().toString(), email, sessionId, userMessageId, "USER", request.prompt(),
-                        rubricJson, null, null, request.assignmentTag()));
-        GeminiClient.GeminiResponse response = geminiClient.generateText(request.prompt());
-        String assistantMessageId = UUID.randomUUID().toString();
-        sheetsClient.appendRow("messages",
-                Arrays.asList(Instant.now().toString(), email, sessionId, assistantMessageId, "ASSISTANT",
-                        response.text(), "{}", response.latencyMs(), response.tokens(), request.assignmentTag()));
-        return ChatResponse.success(sessionId, assistantMessageId, response.text());
+                    Arrays.asList(Instant.now().toString(), email, sessionId, userMessageId, "USER", request.prompt(),
+                            rubricJson, null, null, request.assignmentTag()));
+            String assistantMessageId = UUID.randomUUID().toString();
+            return geminiClient.generateText(request.prompt())
+                    .doOnNext(response -> sheetsClient.appendRow("messages",
+                            Arrays.asList(Instant.now().toString(), email, sessionId, assistantMessageId, "ASSISTANT",
+                                    response.text(), "{}", response.latencyMs(), response.tokens(), request.assignmentTag())))
+                    .map(response -> ChatResponse.success(sessionId, assistantMessageId, response.text()));
+        });
     }
 
     @PostMapping("/feedback")
